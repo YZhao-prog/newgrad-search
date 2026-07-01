@@ -4,7 +4,7 @@ A single-file, self-updating search tool for new-grad tech job listings. Open it
 browser and instantly search thousands of positions by company, role, or location — with
 big-tech companies ranked to the top.
 
-**[▶ Open the live app](index.html)** *(or enable GitHub Pages — see below)*
+**[▶ Open the live app](https://yzhao-prog.github.io/newgrad-search/)**
 
 ## Features
 

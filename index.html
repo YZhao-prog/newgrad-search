@@ -192,17 +192,15 @@ const ROLE_TAGS=[
    re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|platform|data platform|query|file[\s-]?system|object store|\bdbms\b|consensus)/i},
   {label:'🧠 LLM · AI',
    re:/(\bllm\b|\bai\b|artificial intelligence|machine learning|\bml\b|gen[\s-]?ai|\bgpt\b|deep learning|inference|\bnlp\b|generative)/i},
-  {label:'📈 Quant Developer',
-   re:/(?=.*(quant|quantitative))(?=.*(developer|engineer|software|programmer|technolog))/i},
 ];
-const selTags=new Set();
+const selTags=new Set(), tagEls=[];
 const tagBox=document.getElementById('qtags');
 ROLE_TAGS.forEach((t,i)=>{
   const el=document.createElement('span');
   el.className='chip'; el.textContent=t.label;
   el.onclick=()=>{ el.classList.toggle('on');
     selTags.has(i)?selTags.delete(i):selTags.add(i); shown=PAGE; render(); };
-  tagBox.appendChild(el);
+  tagBox.appendChild(el); tagEls.push(el);
 });
 
 const q=document.getElementById('q'),
@@ -283,16 +281,27 @@ function sponBadge(s){
   return '';
 }
 
-function filtered(){
-  const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const ao=activeOnly.checked;
+let baseTotal=0;
+// always-on filters (US · active · recent · not-hidden) — the pool of jobs on the site
+function baseFilter(r){
   const freshDays=+fresh.value, cutoff=Date.now()/1000 - freshDays*86400;
-  return RAW.filter(r=>{
-    if(freshDays && (!r.d || r.d < cutoff)) return false;  // hide stale postings
-    if(HIDE_CATS.has(r.k)) return false;   // hide product / hardware categories
-    if(HIDE_TITLE_RE.test(r.t||'')) return false;  // hide scientist / analyst / PM / trader titles
-    if(!isUS(r.l)) return false;           // US-only, always on
-    if(ao && !r.a) return false;
+  if(freshDays && (!r.d || r.d < cutoff)) return false;
+  if(HIDE_CATS.has(r.k)) return false;
+  if(HIDE_TITLE_RE.test(r.t||'')) return false;
+  if(!isUS(r.l)) return false;
+  if(activeOnly.checked && !r.a) return false;
+  return true;
+}
+function filtered(){
+  const base=RAW.filter(baseFilter);
+  baseTotal=base.length;
+  // show a live count on each role chip (of the base pool)
+  ROLE_TAGS.forEach((t,i)=>{
+    const n=base.reduce((a,r)=>a+(t.re.test(r.t||'')?1:0),0);
+    tagEls[i].textContent=t.label+' ('+n+')';
+  });
+  const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return base.filter(r=>{
     if(selTags.size){ const ti=r.t||''; let ok=false;
       for(const i of selTags){ if(ROLE_TAGS[i].re.test(ti)){ ok=true; break; } }
       if(!ok) return false; }
@@ -310,7 +319,9 @@ function render(){
   if(sortSel.value==='rank') list.sort((a,b)=>(rankOf(b.c)-rankOf(a.c))||(b.d-a.d));
   else list.sort((a,b)=>b.d-a.d);
   const terms=q.value.trim().split(/\s+/).filter(Boolean);
-  count.textContent = list.length.toLocaleString()+' result'+(list.length!==1?'s':'');
+  count.textContent = (list.length===baseTotal)
+    ? baseTotal.toLocaleString()+' jobs'
+    : list.length.toLocaleString()+' of '+baseTotal.toLocaleString()+' jobs';
   if(!list.length){ results.innerHTML='<div class="empty">No matches. Try widening “Posted within”, clearing the role filters, or clearing the search.</div>'; return; }
   const slice=list.slice(0,shown);
   results.innerHTML = slice.map(r=>{

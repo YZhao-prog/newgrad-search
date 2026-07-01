@@ -48,6 +48,7 @@
   .b-top{color:#e3b341;border-color:#6b4c07;font-weight:600}
   .b-sal{color:#3fb950;border-color:#1f6f34}
   .b-src{color:var(--muted)}
+  .b-focus{color:#a371f7;border-color:#553098}
   .right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
   .apply{background:var(--green);color:#fff;text-decoration:none;padding:7px 14px;border-radius:8px;
     font-size:13px;font-weight:500;white-space:nowrap}
@@ -85,6 +86,18 @@
       <option value="Does Not Offer Sponsorship">No sponsorship</option>
       <option value="U.S. Citizenship is Required">US citizenship req.</option>
     </select>
+    <select id="minsal">
+      <option value="0">Any salary</option>
+      <option value="120">$120k+ base</option>
+      <option value="150">$150k+ base</option>
+      <option value="180">$180k+ base</option>
+    </select>
+    <select id="scope">
+      <option value="focus">🎯 Data &amp; Infra focus</option>
+      <option value="notable">⭐ Notable tech</option>
+      <option value="all">All companies</option>
+    </select>
+    <label class="toggle"><input type="checkbox" id="usOnly" checked> 🇺🇸 US only</label>
     <label class="toggle"><input type="checkbox" id="activeOnly" checked> Active only</label>
   </div>
   <div class="chips" id="cats"></div>
@@ -99,6 +112,7 @@ const SNAPSHOT = JSON.parse(document.getElementById('data').textContent)
 let RAW = SNAPSHOT;
 const RANK = {"Google":4,"Meta":4,"Amazon":4,"Apple":4,"Microsoft":4,"NVIDIA":4,"Netflix":4,"Tesla":4,"OpenAI":4,"Anthropic":4,"TikTok":4,"ByteDance":4,"Stripe":3,"Databricks":3,"Snowflake":3,"Uber":3,"Airbnb":3,"Palantir":3,"Salesforce":3,"Adobe":3,"Oracle":3,"LinkedIn":3,"Coinbase":3,"Robinhood":3,"DoorDash":3,"Datadog":3,"Pinterest":3,"Snap":3,"Roblox":3,"Atlassian":3,"ServiceNow":3,"Twilio":3,"SpaceX":3,"Qualcomm":3,"Intel":3,"IBM":3,"Cisco":3,"Samsung":3,"Sony":3,"Sony Interactive Entertainment":3,"Spotify":3,"Dropbox":3,"Lyft":3,"Zoom":3,"Plaid":3,"Figma":3,"Notion":3,"Affirm":3,"Rivian":3,"Waymo":3,"Applied Materials":3,"Texas Instruments":3,"Micron Technology":3,"Okta":3,"Samsara":3,"Intuit":3,"eBay":3,"Anduril":3,"Scale AI":3,"Airtable":3,"Flexport":3,"Asana":3,"Bloomberg Industry Group":3,"Visa":3,"Mastercard":3,"Capital One":3,"Reddit":3,"Goldman Sachs":2,"Morgan Stanley":2,"JP Morgan Chase":2,"Wells Fargo":2,"American Express":2,"BlackRock":2,"Jane Street":2,"Citadel Securities":2,"Hudson River Trading":2,"Jump Trading":2,"Two Sigma":2,"Point72":2,"Optiver":2,"IMC Trading":2,"IMC":2,"Akuna Capital University":2,"DRW":2,"DRW Holdings":2,"Five Rings Capital":2,"Squarepoint Capital":2};
 const rankOf = c => RANK[c] || 0;
+const FOCUS = new Set(["Aerospike","Airbyte","Aiven","Akamai Technologies","Anyscale","Astronomer","Backblaze","Baseten","Bytewax","Census","Cerebras","Chainguard","Chroma","Chronosphere","ClickHouse","Cloudera","Cloudflare","Cockroach Labs","CockroachDB","Cohesity","Confluent","CoreWeave","Couchbase","Cribl","Dagster","DataStax","Databricks","Datadog","Decodable","Deephaven","DigitalOcean","Docker","Dremio","DuckDB Labs","Dynatrace","Elastic","EnterpriseDB","Equinix","Estuary","Fastly","Firebolt","Fireworks AI","Fivetran","Fly.io","Grafana Labs","Groq","HashiCorp","Hightouch","Honeycomb","IBM","Imply","InfluxData","Kong","Lambda","Lambda Labs","LanceDB","MariaDB","Materialize","MinIO","Modal","Modal Labs","Modular","MongoDB","MotherDuck","Nebius","Neo4j","Neon","NetApp","Netlify","New Relic","Nutanix","Observe","OctoAI","Oracle","Percona","Pinecone","PingCAP","Planet","PlanetScale","Portworx","Prefect","Pulumi","Pure Storage","Qdrant","Railway","Redis","Redpanda","Render","Replicate","RisingWave","Rockset","Rubrik","SambaNova","Scale AI","ScyllaDB","Sentry","SingleStore","Snorkel AI","Snowflake","Splunk","StarRocks","Starburst","StreamNative","Sumo Logic","Supabase","Tailscale","Teleport","Temporal Technologies","TigerGraph","Timescale","TimescaleDB","Tinybird","Together AI","Turso","VAST Data","Vectara","Vercel","Vespa","Voltron Data","Vultr","WEKA","WarpStream","Weaviate","Weka","Yugabyte","YugabyteDB","dbt Labs"]);   // data / infra / distributed-systems / storage / data-platform companies
 const CATS = [...new Set(SNAPSHOT.map(r=>r.k))].sort();
 
 // ---- data sources (fetched live from GitHub, CORS-enabled raw endpoints) ----
@@ -188,8 +202,55 @@ CATS.forEach(c=>{
 
 const q=document.getElementById('q'), spon=document.getElementById('spon'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
-      srcSel=document.getElementById('source'),
+      srcSel=document.getElementById('source'), scopeSel=document.getElementById('scope'),
+      minsal=document.getElementById('minsal'), usOnly=document.getElementById('usOnly'),
       results=document.getElementById('results'), count=document.getElementById('count');
+
+// parse a salary string like "$172k/yr" or "$150k-$180k" -> highest base in thousands (0 if none)
+function salaryK(s){
+  if(!s) return 0;
+  const nums=[...s.matchAll(/\$?\s*(\d+(?:\.\d+)?)\s*k/ig)].map(m=>parseFloat(m[1]));
+  return nums.length ? Math.max(...nums) : 0;
+}
+
+// ---- US location detection ----
+const US_CODES=new Set('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' '));
+const US_NAMES=['united states','u.s.a','u.s.','usa','america','remote in usa',
+  'alabama','alaska','arizona','arkansas','california','colorado','connecticut','delaware','florida',
+  'hawaii','idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland',
+  'massachusetts','michigan','minnesota','mississippi','missouri','montana','nebraska','nevada',
+  'new hampshire','new jersey','new mexico','new york','north carolina','north dakota','ohio',
+  'oklahoma','oregon','pennsylvania','rhode island','south carolina','south dakota','tennessee',
+  'texas','utah','vermont','virginia','washington','west virginia','wisconsin','wyoming'];
+const FOREIGN=['canada','toronto','vancouver','montreal','ottawa','ontario','quebec','alberta','british columbia',
+  'united kingdom','london','england','scotland','manchester','ireland','dublin',
+  'india','bangalore','bengaluru','hyderabad','pune','mumbai','delhi','chennai','gurgaon','noida',
+  'germany','berlin','munich','frankfurt','france','paris','netherlands','amsterdam','spain','madrid','barcelona',
+  'singapore','australia','sydney','melbourne','china','beijing','shanghai','shenzhen','hong kong',
+  'japan','tokyo','israel','tel aviv','brazil','são paulo','sao paulo','mexico','poland','warsaw','krakow',
+  'romania','switzerland','zurich','sweden','stockholm','denmark','copenhagen','norway','finland','helsinki',
+  'portugal','lisbon','korea','seoul','taiwan','taipei','philippines','manila','vietnam','thailand','bangkok',
+  'indonesia','malaysia','new zealand','austria','vienna','belgium','czech','prague','hungary','budapest',
+  'greece','turkey','istanbul','egypt','uae','dubai','abu dhabi','saudi','nigeria','south africa','argentina',
+  'chile','colombia','bogota','peru','costa rica'];
+const reEsc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+// word-boundary matching so "india" doesn't match "Indiana/Indianapolis", etc.
+const FOREIGN_RE=new RegExp('\\b('+FOREIGN.map(reEsc).join('|')+')\\b','i');
+const US_NAME_RE=new RegExp('\\b('+US_NAMES.filter(n=>!n.includes('.')).map(reEsc).join('|')+')\\b','i');
+function oneIsUS(s){
+  s=s.toLowerCase();
+  // check US indicators first (handles "New Mexico", "Vancouver, WA", "London, KY")
+  if(US_NAME_RE.test(s)) return true;
+  if([...s.matchAll(/,\s*([a-z]{2})\b/g)].some(m=>US_CODES.has(m[1].toUpperCase()))) return true;
+  if(FOREIGN_RE.test(s)) return false;
+  if(/\bremote\b/.test(s)) return true;   // US-centric boards: treat bare "Remote" as US
+  return false;
+}
+function isUS(locs){
+  if(!locs||!locs.length) return true;    // unknown location -> don't hide
+  if(locs.some(oneIsUS)) return true;                 // any US location qualifies
+  return !locs.some(l=>FOREIGN_RE.test(l.toLowerCase()));
+}
 
 function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 function hl(s,terms){ let out=esc(s);
@@ -221,8 +282,13 @@ function sponBadge(s){
 function filtered(){
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const sp=spon.value, ao=activeOnly.checked, srcv=srcSel.value;
+  const scope=scopeSel.value, minSal=+minsal.value, us=usOnly.checked;
   return RAW.filter(r=>{
     if(ao && !r.a) return false;
+    if(us && !isUS(r.l)) return false;
+    if(scope==='notable' && rankOf(r.c)===0) return false;
+    if(scope==='focus' && !FOCUS.has(r.c)) return false;
+    if(minSal && salaryK(r.sal) < minSal) return false;
     if(sp && r.s!==sp) return false;
     if(srcv && r.src!==srcv) return false;
     if(activeCats.size && !activeCats.has(r.k)) return false;
@@ -240,13 +306,13 @@ function render(){
   else list.sort((a,b)=>b.d-a.d);
   const terms=q.value.trim().split(/\s+/).filter(Boolean);
   count.textContent = list.length.toLocaleString()+' result'+(list.length!==1?'s':'');
-  if(!list.length){ results.innerHTML='<div class="empty">No matches. Try a different search or turn off “Active only”.</div>'; return; }
+  if(!list.length){ results.innerHTML='<div class="empty">No matches. Try switching the company scope to “All companies”, turning off “🇺🇸 US only”, lowering the salary filter, or clearing the search.</div>'; return; }
   const slice=list.slice(0,shown);
   results.innerHTML = slice.map(r=>{
     const loc=(r.l&&r.l.length)? r.l.slice(0,3).join(' · ')+(r.l.length>3?' +'+(r.l.length-3):'') : '—';
     return `<div class="row ${r.a?'':'closed'}">
       <div>
-        <div class="co">${hl(r.c,terms)} ${rankOf(r.c)>=4?'<span class="badge b-top">⭐ Big Tech</span>':rankOf(r.c)>=3?'<span class="badge b-top">★ Top</span>':''}</div>
+        <div class="co">${hl(r.c,terms)} ${rankOf(r.c)>=4?'<span class="badge b-top">⭐ Big Tech</span>':rankOf(r.c)>=3?'<span class="badge b-top">★ Top</span>':''} ${FOCUS.has(r.c)?'<span class="badge b-focus">🎯 Data/Infra</span>':''}</div>
         <div class="title">${hl(r.t,terms)}</div>
         <div class="meta">
           <span>📍 ${hl(loc,terms)}</span>
@@ -267,7 +333,7 @@ function render(){
   if(mb) mb.onclick=()=>{ shown+=PAGE; render(); };
 }
 
-[q,spon,activeOnly,sortSel,srcSel].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
+[q,spon,activeOnly,sortSel,srcSel,scopeSel,minsal,usOnly].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
 
 // ---- live auto-update from all sources ----
 const statusEl=document.getElementById('status'), refreshBtn=document.getElementById('refresh');

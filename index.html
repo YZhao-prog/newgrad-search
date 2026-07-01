@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>New Grad Positions — Company Search</title>
+<title>Yang's New-Grad Job Search</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
@@ -62,29 +62,22 @@
 </head>
 <body>
 <header>
-  <h1>🎓 New Grad Positions — Company Search</h1>
+  <h1>🎯 Yang's New-Grad Job Search</h1>
   <div class="sub">Data from
     <a href="https://github.com/SimplifyJobs/New-Grad-Positions" target="_blank">SimplifyJobs/New-Grad-Positions</a>
     · <span id="asof"></span>
     · <span id="status">⚪ snapshot</span>
     <button id="refresh" title="Fetch latest from GitHub">🔄 Refresh</button></div>
   <div class="controls">
-    <input id="q" type="text" placeholder="Search company, role, or location…  (e.g. Google, backend, remote)" autofocus>
+    <input id="q" type="text" placeholder="Search company, role, or location…  (e.g. Databricks, backend, storage)" autofocus>
+    <select id="scope">
+      <option value="focus">🎯 Data &amp; Infra focus</option>
+      <option value="notable">⭐ Notable tech</option>
+      <option value="all">All companies</option>
+    </select>
     <select id="sort">
       <option value="rank">Sort: Top tech first</option>
       <option value="new">Sort: Newest first</option>
-    </select>
-    <select id="source">
-      <option value="">All sources</option>
-      <option value="Simplify">Simplify</option>
-      <option value="SpeedyApply">SpeedyApply</option>
-      <option value="Ambicuity">Ambicuity</option>
-    </select>
-    <select id="spon">
-      <option value="">Any sponsorship</option>
-      <option value="Offers Sponsorship">Offers sponsorship</option>
-      <option value="Does Not Offer Sponsorship">No sponsorship</option>
-      <option value="U.S. Citizenship is Required">US citizenship req.</option>
     </select>
     <select id="minsal">
       <option value="0">Any salary</option>
@@ -92,15 +85,8 @@
       <option value="150">$150k+ base</option>
       <option value="180">$180k+ base</option>
     </select>
-    <select id="scope">
-      <option value="focus">🎯 Data &amp; Infra focus</option>
-      <option value="notable">⭐ Notable tech</option>
-      <option value="all">All companies</option>
-    </select>
-    <label class="toggle"><input type="checkbox" id="usOnly" checked> 🇺🇸 US only</label>
     <label class="toggle"><input type="checkbox" id="activeOnly" checked> Active only</label>
   </div>
-  <div class="chips" id="cats"></div>
 </header>
 <div id="count"></div>
 <main id="results"></main>
@@ -177,9 +163,12 @@ function fromSpeedyApply(md){
   }
   return out;
 }
-let activeCats = new Set();
 const PAGE = 60;
 let shown = PAGE;
+
+// role categories to hide — this is a personal tool for SWE / backend / data-infra roles,
+// so product, applied-science / data-science, finance/quant, and hardware are excluded.
+const HIDE_CATS = new Set(['Product','Quant','AI/ML/Data','Hardware']);
 
 // as-of date = newest posting
 function updateAsof(){
@@ -189,21 +178,9 @@ function updateAsof(){
 }
 updateAsof();
 
-// category chips
-const catBox = document.getElementById('cats');
-CATS.forEach(c=>{
-  const el=document.createElement('span');
-  el.className='chip'; el.textContent=c;
-  el.onclick=()=>{ el.classList.toggle('on');
-    if(activeCats.has(c)) activeCats.delete(c); else activeCats.add(c);
-    render(); };
-  catBox.appendChild(el);
-});
-
-const q=document.getElementById('q'), spon=document.getElementById('spon'),
+const q=document.getElementById('q'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
-      srcSel=document.getElementById('source'), scopeSel=document.getElementById('scope'),
-      minsal=document.getElementById('minsal'), usOnly=document.getElementById('usOnly'),
+      scopeSel=document.getElementById('scope'), minsal=document.getElementById('minsal'),
       results=document.getElementById('results'), count=document.getElementById('count');
 
 // parse a salary string like "$172k/yr" or "$150k-$180k" -> highest base in thousands (0 if none)
@@ -281,17 +258,14 @@ function sponBadge(s){
 
 function filtered(){
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const sp=spon.value, ao=activeOnly.checked, srcv=srcSel.value;
-  const scope=scopeSel.value, minSal=+minsal.value, us=usOnly.checked;
+  const ao=activeOnly.checked, scope=scopeSel.value, minSal=+minsal.value;
   return RAW.filter(r=>{
+    if(HIDE_CATS.has(r.k)) return false;   // hide product / applied-science / quant / hardware
+    if(!isUS(r.l)) return false;           // US-only, always on
     if(ao && !r.a) return false;
-    if(us && !isUS(r.l)) return false;
     if(scope==='notable' && rankOf(r.c)===0) return false;
     if(scope==='focus' && !FOCUS.has(r.c)) return false;
     if(minSal && salaryK(r.sal) < minSal) return false;
-    if(sp && r.s!==sp) return false;
-    if(srcv && r.src!==srcv) return false;
-    if(activeCats.size && !activeCats.has(r.k)) return false;
     if(terms.length){
       const hay=(r.c+' '+r.t+' '+(r.l||[]).join(' ')+' '+r.k).toLowerCase();
       if(!terms.every(t=>hay.includes(t))) return false;
@@ -306,7 +280,7 @@ function render(){
   else list.sort((a,b)=>b.d-a.d);
   const terms=q.value.trim().split(/\s+/).filter(Boolean);
   count.textContent = list.length.toLocaleString()+' result'+(list.length!==1?'s':'');
-  if(!list.length){ results.innerHTML='<div class="empty">No matches. Try switching the company scope to “All companies”, turning off “🇺🇸 US only”, lowering the salary filter, or clearing the search.</div>'; return; }
+  if(!list.length){ results.innerHTML='<div class="empty">No matches. Try switching the company scope to “All companies”, lowering the salary filter, or clearing the search.</div>'; return; }
   const slice=list.slice(0,shown);
   results.innerHTML = slice.map(r=>{
     const loc=(r.l&&r.l.length)? r.l.slice(0,3).join(' · ')+(r.l.length>3?' +'+(r.l.length-3):'') : '—';
@@ -333,7 +307,7 @@ function render(){
   if(mb) mb.onclick=()=>{ shown+=PAGE; render(); };
 }
 
-[q,spon,activeOnly,sortSel,srcSel,scopeSel,minsal,usOnly].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
+[q,activeOnly,sortSel,scopeSel,minsal].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
 
 // ---- live auto-update from all sources ----
 const statusEl=document.getElementById('status'), refreshBtn=document.getElementById('refresh');

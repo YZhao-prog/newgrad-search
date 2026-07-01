@@ -20,6 +20,8 @@
   #refresh{background:var(--bg);border:1px solid var(--border);color:var(--text);
     padding:3px 10px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:4px}
   #refresh:disabled{opacity:.5;cursor:default}
+  .libtn{background:#0a66c2;border:1px solid #0a66c2;color:#fff;padding:4px 11px;border-radius:6px;
+    font-size:12px;margin-left:6px;text-decoration:none;white-space:nowrap}
   #status{font-size:12px}
   .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   #q{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--border);color:var(--text);
@@ -29,6 +31,9 @@
     padding:9px 10px;border-radius:8px;font-size:13px;cursor:pointer}
   .toggle{display:flex;align-items:center;gap:6px;user-select:none}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .qrow{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .qlabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .qrow .chips{margin-top:0}
   .chip{background:var(--bg);border:1px solid var(--border);color:var(--muted);padding:5px 11px;
     border-radius:999px;font-size:12px;cursor:pointer}
   .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -67,7 +72,8 @@
     <a href="https://github.com/SimplifyJobs/New-Grad-Positions" target="_blank">SimplifyJobs/New-Grad-Positions</a>
     · <span id="asof"></span>
     · <span id="status">⚪ snapshot</span>
-    <button id="refresh" title="Fetch latest from GitHub">🔄 Refresh</button></div>
+    <button id="refresh" title="Fetch latest from GitHub">🔄 Refresh</button>
+    <a id="lilink" class="libtn" href="#" target="_blank" rel="noopener" title="Search these on LinkedIn (US · recent · entry-level)">🔗 Search LinkedIn</a></div>
   <div class="controls">
     <input id="q" type="text" placeholder="Search company, role, or location…  (e.g. Databricks, backend, storage)" autofocus>
     <select id="scope">
@@ -79,6 +85,13 @@
       <option value="rank">Sort: Top tech first</option>
       <option value="new">Sort: Newest first</option>
     </select>
+    <select id="fresh">
+      <option value="0">Posted: any time</option>
+      <option value="14">Posted: past 2 weeks</option>
+      <option value="30">Posted: past month</option>
+      <option value="60" selected>Posted: past 2 months</option>
+      <option value="90">Posted: past 3 months</option>
+    </select>
     <select id="minsal">
       <option value="0">Any salary</option>
       <option value="120">$120k+ base</option>
@@ -87,6 +100,7 @@
     </select>
     <label class="toggle"><input type="checkbox" id="activeOnly" checked> Active only</label>
   </div>
+  <div class="qrow"><span class="qlabel">Role:</span><div class="chips" id="qtags"></div></div>
 </header>
 <div id="count"></div>
 <main id="results"></main>
@@ -166,9 +180,12 @@ function fromSpeedyApply(md){
 const PAGE = 60;
 let shown = PAGE;
 
-// role categories to hide — this is a personal tool for SWE / backend / data-infra roles,
-// so product, applied-science / data-science, finance/quant, and hardware are excluded.
-const HIDE_CATS = new Set(['Product','Quant','AI/ML/Data','Hardware']);
+// personal tool for SWE / backend / data-infra roles.
+// hide product-management, finance/quant, and hardware categories outright...
+const HIDE_CATS = new Set(['Product','Quant','Hardware']);
+// ...and hide non-engineering titles (scientist / analyst / PM) so AI & data *engineering*
+// roles still show while applied-science / data-science / finance roles do not.
+const HIDE_TITLE_RE = /(data scientist|applied scientist|research scientist|\bscientist\b|data analyst|business analyst|product manager|program manager|\bquant\b|\btrader\b|recruiter|\bsales\b)/i;
 
 // as-of date = newest posting
 function updateAsof(){
@@ -178,10 +195,38 @@ function updateAsof(){
 }
 updateAsof();
 
+// ---- quick role filters (match against the job title) ----
+const ROLE_TAGS=[
+  {label:'Backend',            re:/(back[\s-]?end|server[\s-]?side|\bapi\b|micro[\s-]?service)/i},
+  {label:'Infrastructure',     re:/(infrastructure|\binfra\b|\bsre\b|reliability|platform engineer|systems? engineer)/i},
+  {label:'Distributed Systems',re:/(distributed|consensus)/i},
+  {label:'Database',           re:/(database|\bsql\b|query engine|data platform|storage engine|\bdbms\b)/i},
+  {label:'Storage / Cache',    re:/(storage|\bcache|caching|file[\s-]?system|object store)/i},
+  {label:'AI / ML',            re:/(\bai\b|artificial intelligence|machine learning|\bml\b|\bllm\b|deep learning|gen[\s-]?ai|inference)/i},
+  {label:'Cloud / DevOps',     re:/(\bcloud\b|kubernetes|devops|\baws\b|\bgcp\b|\bazure\b|container|docker)/i},
+];
+const selTags=new Set();
+const tagBox=document.getElementById('qtags');
+ROLE_TAGS.forEach((t,i)=>{
+  const el=document.createElement('span');
+  el.className='chip'; el.textContent=t.label;
+  el.onclick=()=>{ el.classList.toggle('on');
+    selTags.has(i)?selTags.delete(i):selTags.add(i); shown=PAGE; render(); };
+  tagBox.appendChild(el);
+});
+
 const q=document.getElementById('q'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
       scopeSel=document.getElementById('scope'), minsal=document.getElementById('minsal'),
+      fresh=document.getElementById('fresh'), lilink=document.getElementById('lilink'),
       results=document.getElementById('results'), count=document.getElementById('count');
+
+// build a LinkedIn jobs search from the current query (US · past month · entry-level)
+function updateLinkedIn(){
+  const kw=q.value.trim() || 'new grad software engineer';
+  lilink.href='https://www.linkedin.com/jobs/search/?keywords='+encodeURIComponent(kw)+
+    '&location=United%20States&f_TPR=r2592000&f_E=1%2C2';
+}
 
 // parse a salary string like "$172k/yr" or "$150k-$180k" -> highest base in thousands (0 if none)
 function salaryK(s){
@@ -259,10 +304,16 @@ function sponBadge(s){
 function filtered(){
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const ao=activeOnly.checked, scope=scopeSel.value, minSal=+minsal.value;
+  const freshDays=+fresh.value, cutoff=Date.now()/1000 - freshDays*86400;
   return RAW.filter(r=>{
-    if(HIDE_CATS.has(r.k)) return false;   // hide product / applied-science / quant / hardware
+    if(freshDays && (!r.d || r.d < cutoff)) return false;  // hide stale postings
+    if(HIDE_CATS.has(r.k)) return false;   // hide product / quant / hardware categories
+    if(HIDE_TITLE_RE.test(r.t||'')) return false;  // hide scientist / analyst / PM titles
     if(!isUS(r.l)) return false;           // US-only, always on
     if(ao && !r.a) return false;
+    if(selTags.size){ const ti=r.t||''; let ok=false;
+      for(const i of selTags){ if(ROLE_TAGS[i].re.test(ti)){ ok=true; break; } }
+      if(!ok) return false; }
     if(scope==='notable' && rankOf(r.c)===0) return false;
     if(scope==='focus' && !FOCUS.has(r.c)) return false;
     if(minSal && salaryK(r.sal) < minSal) return false;
@@ -275,6 +326,7 @@ function filtered(){
 }
 
 function render(){
+  updateLinkedIn();
   const list=filtered();
   if(sortSel.value==='rank') list.sort((a,b)=>(rankOf(b.c)-rankOf(a.c))||(b.d-a.d));
   else list.sort((a,b)=>b.d-a.d);
@@ -307,7 +359,7 @@ function render(){
   if(mb) mb.onclick=()=>{ shown+=PAGE; render(); };
 }
 
-[q,activeOnly,sortSel,scopeSel,minsal].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
+[q,activeOnly,sortSel,scopeSel,minsal,fresh].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
 
 // ---- live auto-update from all sources ----
 const statusEl=document.getElementById('status'), refreshBtn=document.getElementById('refresh');
@@ -318,6 +370,18 @@ async function fetchSource(name){
   if(name==='Ambicuity')   return fromAmbicuity(await res.json());
   if(name==='SpeedyApply') return fromSpeedyApply(await res.text());
   return [];
+}
+// collapse duplicates across sources: same company + title -> keep best (active > newer > has salary)
+function dedupe(list){
+  const norm=s=>(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const better=(a,b)=>{ const aa=a.a?1:0,bb=b.a?1:0;
+    if(aa!==bb) return aa>bb;
+    if((a.d||0)!==(b.d||0)) return (a.d||0)>(b.d||0);
+    return (a.sal?1:0)>=(b.sal?1:0); };
+  const best=new Map();
+  for(const r of list){ const key=norm(r.c)+'::'+norm(r.t);
+    const p=best.get(key); if(!p||better(r,p)) best.set(key,r); }
+  return [...best.values()];
 }
 async function loadLive(){
   refreshBtn.disabled=true; statusEl.textContent='🟡 fetching…';
@@ -330,11 +394,7 @@ async function loadLive(){
   });
   // if Simplify failed, keep its embedded snapshot so we never lose that data
   if(failed.includes('Simplify')) merged=merged.concat(SNAPSHOT);
-  // de-dupe by application URL (keep the newest)
-  const byUrl=new Map();
-  for(const r of merged){ const k=r.u||r.c+'|'+r.t;
-    const p=byUrl.get(k); if(!p || (r.d||0)>(p.d||0)) byUrl.set(k,r); }
-  RAW=[...byUrl.values()];
+  RAW=dedupe(merged);
   updateAsof(); render();
   statusEl.textContent = ok.length
     ? '🟢 live · '+ok.join(' + ')+(failed.length?' (⚠ '+failed.join(',')+' failed)':'')+' · '+new Date().toLocaleTimeString()
@@ -343,7 +403,7 @@ async function loadLive(){
 }
 refreshBtn.onclick=loadLive;
 
-render();          // show embedded snapshot instantly
+RAW=dedupe(SNAPSHOT); render();   // show embedded (deduped) snapshot instantly
 loadLive();        // then pull the latest from all three repos
 setInterval(loadLive, 30*60*1000);   // re-check every 30 min while open
 </script>

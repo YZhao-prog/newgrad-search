@@ -203,7 +203,7 @@ const DATA_ENG_RE=/\bdata engineer(ing)?\b/i;   // data engineering is a distinc
 function bucketOf(r){
   const t=r.t||'';
   if(ROLE_TAGS[1].re.test(t)) return 1;                    // LLM / AI title
-  if(!DATA_ENG_RE.test(t) && (FOCUS.has(r.c) || ROLE_TAGS[0].re.test(t))) return 0;  // DB/storage/infra (excluding data-engineer)
+  if(!DATA_ENG_RE.test(t) && FOCUS.has(r.c)) return 0;     // data/infra COMPANY by name (Snowflake, Databricks…), excluding data-engineer
   if(ROLE_TAGS[2].re.test(t)) return 2;                    // general software engineer
   return OTHER_I;
 }

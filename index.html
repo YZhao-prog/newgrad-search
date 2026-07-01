@@ -80,6 +80,12 @@
       <option value="rank">Sort: Top tech first</option>
       <option value="new">Sort: Newest first</option>
     </select>
+    <select id="source">
+      <option value="">All sources</option>
+      <option value="Simplify">Simplify</option>
+      <option value="SpeedyApply">SpeedyApply</option>
+      <option value="Ambicuity">Ambicuity</option>
+    </select>
     <select id="fresh">
       <option value="0">Posted: any time</option>
       <option value="14">Posted: past 2 weeks</option>
@@ -220,6 +226,7 @@ CHIP_LABELS.forEach((label,i)=>{
 const q=document.getElementById('q'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
       fresh=document.getElementById('fresh'), lilink=document.getElementById('lilink'),
+      srcSel=document.getElementById('source'),
       results=document.getElementById('results'), count=document.getElementById('count');
 
 // build a LinkedIn jobs search from the current query (US · past month · entry-level)
@@ -300,6 +307,7 @@ let baseTotal=0;
 function baseFilter(r){
   const freshDays=+fresh.value, cutoff=Date.now()/1000 - freshDays*86400;
   if(freshDays && (!r.d || r.d < cutoff)) return false;
+  if(srcSel.value && r.src!==srcSel.value) return false;
   if(HIDE_CATS.has(r.k)) return false;
   if(HIDE_TITLE_RE.test(r.t||'')) return false;
   if(!isUS(r.l)) return false;
@@ -363,7 +371,7 @@ function render(){
   if(mb) mb.onclick=()=>{ shown+=PAGE; render(); };
 }
 
-[q,activeOnly,sortSel,fresh].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
+[q,activeOnly,sortSel,fresh,srcSel].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
 
 // ---- live auto-update from all sources ----
 const statusEl=document.getElementById('status'), refreshBtn=document.getElementById('refresh');

@@ -94,6 +94,7 @@
     </select>
     <label class="toggle"><input type="checkbox" id="activeOnly" checked> Active only</label>
   </div>
+  <div class="qrow"><span class="qlabel">Role:</span><div class="chips" id="qtags"></div></div>
 </header>
 <div id="count"></div>
 <main id="results"></main>
@@ -188,6 +189,23 @@ function updateAsof(){
 }
 updateAsof();
 
+// ---- quick role filters (optional, match against the job title) ----
+const ROLE_TAGS=[
+  {label:'🗄️ Database · Storage · Infra',
+   re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|platform|data platform|query|file[\s-]?system|object store|\bdbms\b|consensus)/i},
+  {label:'🧠 LLM · AI',
+   re:/(\bllm\b|\bai\b|artificial intelligence|machine learning|\bml\b|gen[\s-]?ai|\bgpt\b|deep learning|inference|\bnlp\b|generative)/i},
+];
+const selTags=new Set();
+const tagBox=document.getElementById('qtags');
+ROLE_TAGS.forEach((t,i)=>{
+  const el=document.createElement('span');
+  el.className='chip'; el.textContent=t.label;
+  el.onclick=()=>{ el.classList.toggle('on');
+    selTags.has(i)?selTags.delete(i):selTags.add(i); shown=PAGE; render(); };
+  tagBox.appendChild(el);
+});
+
 const q=document.getElementById('q'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
       scopeSel=document.getElementById('scope'),
@@ -277,6 +295,9 @@ function filtered(){
     if(HIDE_TITLE_RE.test(r.t||'')) return false;  // hide scientist / analyst / PM titles
     if(!isUS(r.l)) return false;           // US-only, always on
     if(ao && !r.a) return false;
+    if(selTags.size){ const ti=r.t||''; let ok=false;
+      for(const i of selTags){ if(ROLE_TAGS[i].re.test(ti)){ ok=true; break; } }
+      if(!ok) return false; }
     if(scope==='notable' && rankOf(r.c)===0) return false;
     if(scope==='focus' && !FOCUS.has(r.c)) return false;
     if(terms.length){

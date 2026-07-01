@@ -76,11 +76,6 @@
     <a id="lilink" class="libtn" href="#" target="_blank" rel="noopener" title="Search these on LinkedIn (US · recent · entry-level)">🔗 Search LinkedIn</a></div>
   <div class="controls">
     <input id="q" type="text" placeholder="Search company, role, or location…  (e.g. Databricks, backend, storage)" autofocus>
-    <select id="scope">
-      <option value="focus">🎯 Database · Storage · Distributed · Infra</option>
-      <option value="notable">⭐ Notable tech</option>
-      <option value="all">All companies</option>
-    </select>
     <select id="sort">
       <option value="rank">Sort: Top tech first</option>
       <option value="new">Sort: Newest first</option>
@@ -174,12 +169,12 @@ function fromSpeedyApply(md){
 const PAGE = 60;
 let shown = PAGE;
 
-// personal tool for SWE / backend / data-infra roles.
-// hide product-management, finance/quant, and hardware categories outright...
-const HIDE_CATS = new Set(['Product','Quant','Hardware']);
-// ...and hide non-engineering titles (scientist / analyst / PM) so AI & data *engineering*
-// roles still show while applied-science / data-science / finance roles do not.
-const HIDE_TITLE_RE = /(data scientist|applied scientist|research scientist|\bscientist\b|data analyst|business analyst|product manager|program manager|\bquant\b|\btrader\b|recruiter|\bsales\b)/i;
+// personal tool for SWE / backend / data-infra / quant-dev roles.
+// hide product-management and hardware categories outright...
+const HIDE_CATS = new Set(['Product','Hardware']);
+// ...and hide non-engineering titles (scientist / analyst / PM / trader / quant-researcher)
+// so engineering roles — including quant *developers* — still show.
+const HIDE_TITLE_RE = /(data scientist|applied scientist|research scientist|\bscientist\b|data analyst|business analyst|financial analyst|product manager|program manager|\btrader\b|quantitative researcher|quant researcher|quantitative analyst|recruiter|\bsales\b)/i;
 
 // as-of date = newest posting
 function updateAsof(){
@@ -191,10 +186,14 @@ updateAsof();
 
 // ---- quick role filters (optional, match against the job title) ----
 const ROLE_TAGS=[
+  {label:'💻 Software Engineer',
+   re:/(software engineer|software developer|\bswe\b|back[\s-]?end|full[\s-]?stack|systems? engineer|platform engineer)/i},
   {label:'🗄️ Database · Storage · Infra',
    re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|platform|data platform|query|file[\s-]?system|object store|\bdbms\b|consensus)/i},
   {label:'🧠 LLM · AI',
    re:/(\bllm\b|\bai\b|artificial intelligence|machine learning|\bml\b|gen[\s-]?ai|\bgpt\b|deep learning|inference|\bnlp\b|generative)/i},
+  {label:'📈 Quant Developer',
+   re:/(?=.*(quant|quantitative))(?=.*(developer|engineer|software|programmer|technolog))/i},
 ];
 const selTags=new Set();
 const tagBox=document.getElementById('qtags');
@@ -208,7 +207,6 @@ ROLE_TAGS.forEach((t,i)=>{
 
 const q=document.getElementById('q'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
-      scopeSel=document.getElementById('scope'),
       fresh=document.getElementById('fresh'), lilink=document.getElementById('lilink'),
       results=document.getElementById('results'), count=document.getElementById('count');
 
@@ -287,19 +285,17 @@ function sponBadge(s){
 
 function filtered(){
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const ao=activeOnly.checked, scope=scopeSel.value;
+  const ao=activeOnly.checked;
   const freshDays=+fresh.value, cutoff=Date.now()/1000 - freshDays*86400;
   return RAW.filter(r=>{
     if(freshDays && (!r.d || r.d < cutoff)) return false;  // hide stale postings
-    if(HIDE_CATS.has(r.k)) return false;   // hide product / quant / hardware categories
-    if(HIDE_TITLE_RE.test(r.t||'')) return false;  // hide scientist / analyst / PM titles
+    if(HIDE_CATS.has(r.k)) return false;   // hide product / hardware categories
+    if(HIDE_TITLE_RE.test(r.t||'')) return false;  // hide scientist / analyst / PM / trader titles
     if(!isUS(r.l)) return false;           // US-only, always on
     if(ao && !r.a) return false;
     if(selTags.size){ const ti=r.t||''; let ok=false;
       for(const i of selTags){ if(ROLE_TAGS[i].re.test(ti)){ ok=true; break; } }
       if(!ok) return false; }
-    if(scope==='notable' && rankOf(r.c)===0) return false;
-    if(scope==='focus' && !FOCUS.has(r.c)) return false;
     if(terms.length){
       const hay=(r.c+' '+r.t+' '+(r.l||[]).join(' ')+' '+r.k).toLowerCase();
       if(!terms.every(t=>hay.includes(t))) return false;
@@ -315,7 +311,7 @@ function render(){
   else list.sort((a,b)=>b.d-a.d);
   const terms=q.value.trim().split(/\s+/).filter(Boolean);
   count.textContent = list.length.toLocaleString()+' result'+(list.length!==1?'s':'');
-  if(!list.length){ results.innerHTML='<div class="empty">No matches. Try switching the company scope to “All companies”, lowering the salary filter, or clearing the search.</div>'; return; }
+  if(!list.length){ results.innerHTML='<div class="empty">No matches. Try widening “Posted within”, clearing the role filters, or clearing the search.</div>'; return; }
   const slice=list.slice(0,shown);
   results.innerHTML = slice.map(r=>{
     const loc=(r.l&&r.l.length)? r.l.slice(0,3).join(' · ')+(r.l.length>3?' +'+(r.l.length-3):'') : '—';
@@ -342,7 +338,7 @@ function render(){
   if(mb) mb.onclick=()=>{ shown+=PAGE; render(); };
 }
 
-[q,activeOnly,sortSel,scopeSel,fresh].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
+[q,activeOnly,sortSel,fresh].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
 
 // ---- live auto-update from all sources ----
 const statusEl=document.getElementById('status'), refreshBtn=document.getElementById('refresh');

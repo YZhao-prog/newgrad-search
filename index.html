@@ -77,7 +77,7 @@
   <div class="controls">
     <input id="q" type="text" placeholder="Search company, role, or location…  (e.g. Databricks, backend, storage)" autofocus>
     <select id="scope">
-      <option value="focus">🎯 Data &amp; Infra focus</option>
+      <option value="focus">🎯 Database · Storage · Distributed · Infra</option>
       <option value="notable">⭐ Notable tech</option>
       <option value="all">All companies</option>
     </select>
@@ -92,15 +92,8 @@
       <option value="60" selected>Posted: past 2 months</option>
       <option value="90">Posted: past 3 months</option>
     </select>
-    <select id="minsal">
-      <option value="0">Any salary</option>
-      <option value="120">$120k+ base</option>
-      <option value="150">$150k+ base</option>
-      <option value="180">$180k+ base</option>
-    </select>
     <label class="toggle"><input type="checkbox" id="activeOnly" checked> Active only</label>
   </div>
-  <div class="qrow"><span class="qlabel">Role:</span><div class="chips" id="qtags"></div></div>
 </header>
 <div id="count"></div>
 <main id="results"></main>
@@ -195,27 +188,9 @@ function updateAsof(){
 }
 updateAsof();
 
-// ---- quick role filters (match against the job title) ----
-const ROLE_TAGS=[
-  {label:'Backend',            re:/(back[\s-]?end|server[\s-]?side|\bapi\b|micro[\s-]?service)/i},
-  {label:'Infrastructure',     re:/(infrastructure|\binfra\b|\bsre\b|reliability|platform engineer|systems? engineer)/i},
-  {label:'Distributed · DB · Storage',re:/(distributed|consensus|database|\bsql\b|query engine|data platform|storage|\bcache|caching|file[\s-]?system|object store|\bdbms\b)/i},
-  {label:'AI / ML',            re:/(\bai\b|artificial intelligence|machine learning|\bml\b|\bllm\b|deep learning|gen[\s-]?ai|inference)/i},
-  {label:'Cloud / DevOps',     re:/(\bcloud\b|kubernetes|devops|\baws\b|\bgcp\b|\bazure\b|container|docker)/i},
-];
-const selTags=new Set();
-const tagBox=document.getElementById('qtags');
-ROLE_TAGS.forEach((t,i)=>{
-  const el=document.createElement('span');
-  el.className='chip'; el.textContent=t.label;
-  el.onclick=()=>{ el.classList.toggle('on');
-    selTags.has(i)?selTags.delete(i):selTags.add(i); shown=PAGE; render(); };
-  tagBox.appendChild(el);
-});
-
 const q=document.getElementById('q'),
       activeOnly=document.getElementById('activeOnly'), sortSel=document.getElementById('sort'),
-      scopeSel=document.getElementById('scope'), minsal=document.getElementById('minsal'),
+      scopeSel=document.getElementById('scope'),
       fresh=document.getElementById('fresh'), lilink=document.getElementById('lilink'),
       results=document.getElementById('results'), count=document.getElementById('count');
 
@@ -224,13 +199,6 @@ function updateLinkedIn(){
   const kw=q.value.trim() || 'new grad software engineer';
   lilink.href='https://www.linkedin.com/jobs/search/?keywords='+encodeURIComponent(kw)+
     '&location=United%20States&f_TPR=r2592000&f_E=1%2C2';
-}
-
-// parse a salary string like "$172k/yr" or "$150k-$180k" -> highest base in thousands (0 if none)
-function salaryK(s){
-  if(!s) return 0;
-  const nums=[...s.matchAll(/\$?\s*(\d+(?:\.\d+)?)\s*k/ig)].map(m=>parseFloat(m[1]));
-  return nums.length ? Math.max(...nums) : 0;
 }
 
 // ---- US location detection ----
@@ -301,7 +269,7 @@ function sponBadge(s){
 
 function filtered(){
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const ao=activeOnly.checked, scope=scopeSel.value, minSal=+minsal.value;
+  const ao=activeOnly.checked, scope=scopeSel.value;
   const freshDays=+fresh.value, cutoff=Date.now()/1000 - freshDays*86400;
   return RAW.filter(r=>{
     if(freshDays && (!r.d || r.d < cutoff)) return false;  // hide stale postings
@@ -309,12 +277,8 @@ function filtered(){
     if(HIDE_TITLE_RE.test(r.t||'')) return false;  // hide scientist / analyst / PM titles
     if(!isUS(r.l)) return false;           // US-only, always on
     if(ao && !r.a) return false;
-    if(selTags.size){ const ti=r.t||''; let ok=false;
-      for(const i of selTags){ if(ROLE_TAGS[i].re.test(ti)){ ok=true; break; } }
-      if(!ok) return false; }
     if(scope==='notable' && rankOf(r.c)===0) return false;
     if(scope==='focus' && !FOCUS.has(r.c)) return false;
-    if(minSal && salaryK(r.sal) < minSal) return false;
     if(terms.length){
       const hay=(r.c+' '+r.t+' '+(r.l||[]).join(' ')+' '+r.k).toLowerCase();
       if(!terms.every(t=>hay.includes(t))) return false;
@@ -357,7 +321,7 @@ function render(){
   if(mb) mb.onclick=()=>{ shown+=PAGE; render(); };
 }
 
-[q,activeOnly,sortSel,scopeSel,minsal,fresh].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
+[q,activeOnly,sortSel,scopeSel,fresh].forEach(el=>el.addEventListener('input',()=>{shown=PAGE;render();}));
 
 // ---- live auto-update from all sources ----
 const statusEl=document.getElementById('status'), refreshBtn=document.getElementById('refresh');

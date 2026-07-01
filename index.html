@@ -197,7 +197,15 @@ const ROLE_TAGS=[
 ];
 const OTHER_I=ROLE_TAGS.length;
 const CHIP_LABELS=[...ROLE_TAGS.map(t=>t.label), '🧩 Other'];
-function bucketOf(t){ for(let i=0;i<ROLE_TAGS.length;i++) if(ROLE_TAGS[i].re.test(t)) return i; return OTHER_I; }
+// exactly one bucket per job: AI-titled first, then data/infra company OR DB-infra title,
+// then general software engineer, else Other. FOCUS = the data/infra company list.
+function bucketOf(r){
+  const t=r.t||'';
+  if(ROLE_TAGS[1].re.test(t)) return 1;                    // LLM / AI title
+  if(FOCUS.has(r.c) || ROLE_TAGS[0].re.test(t)) return 0;  // data/infra company (Snowflake, Databricks…) or DB/infra title
+  if(ROLE_TAGS[2].re.test(t)) return 2;                    // general software engineer
+  return OTHER_I;
+}
 const selTags=new Set(), tagEls=[];
 const tagBox=document.getElementById('qtags');
 CHIP_LABELS.forEach((label,i)=>{
@@ -302,7 +310,7 @@ function filtered(){
   baseTotal=base.length;
   // assign each job to exactly one bucket; counts sum to the total
   const counts=new Array(CHIP_LABELS.length).fill(0);
-  const bucket=base.map(r=>{ const b=bucketOf(r.t||''); counts[b]++; return b; });
+  const bucket=base.map(r=>{ const b=bucketOf(r); counts[b]++; return b; });
   tagEls.forEach((el,i)=> el.textContent=CHIP_LABELS[i]+' ('+counts[i]+')');
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const out=[];

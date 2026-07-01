@@ -185,19 +185,24 @@ function updateAsof(){
 updateAsof();
 
 // ---- quick role filters (optional, match against the job title) ----
+// Each job is assigned to exactly one bucket (first match wins, most-specific first),
+// so the chip counts partition the total. Anything unmatched falls into "Other".
 const ROLE_TAGS=[
-  {label:'💻 Software Engineer',
-   re:/(software engineer|software developer|\bswe\b|back[\s-]?end|full[\s-]?stack|systems? engineer|platform engineer)/i},
   {label:'🗄️ Database · Storage · Infra',
-   re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|platform|data platform|query|file[\s-]?system|object store|\bdbms\b|consensus)/i},
+   re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|data platform|data engineer|data engineering|\betl\b|pipeline|query|file[\s-]?system|object store|\bdbms\b|consensus|kubernetes|\bcloud\b|devops|platform engineer)/i},
   {label:'🧠 LLM · AI',
    re:/(\bllm\b|\bai\b|artificial intelligence|machine learning|\bml\b|gen[\s-]?ai|\bgpt\b|deep learning|inference|\bnlp\b|generative)/i},
+  {label:'💻 Software Engineer',
+   re:/(software engineer|software developer|\bswe\b|back[\s-]?end|front[\s-]?end|full[\s-]?stack|web developer|systems? engineer|\bengineer\b|\bdeveloper\b|programmer)/i},
 ];
+const OTHER_I=ROLE_TAGS.length;
+const CHIP_LABELS=[...ROLE_TAGS.map(t=>t.label), '🧩 Other'];
+function bucketOf(t){ for(let i=0;i<ROLE_TAGS.length;i++) if(ROLE_TAGS[i].re.test(t)) return i; return OTHER_I; }
 const selTags=new Set(), tagEls=[];
 const tagBox=document.getElementById('qtags');
-ROLE_TAGS.forEach((t,i)=>{
+CHIP_LABELS.forEach((label,i)=>{
   const el=document.createElement('span');
-  el.className='chip'; el.textContent=t.label;
+  el.className='chip'; el.textContent=label;
   el.onclick=()=>{ el.classList.toggle('on');
     selTags.has(i)?selTags.delete(i):selTags.add(i); shown=PAGE; render(); };
   tagBox.appendChild(el); tagEls.push(el);
@@ -295,22 +300,22 @@ function baseFilter(r){
 function filtered(){
   const base=RAW.filter(baseFilter);
   baseTotal=base.length;
-  // show a live count on each role chip (of the base pool)
-  ROLE_TAGS.forEach((t,i)=>{
-    const n=base.reduce((a,r)=>a+(t.re.test(r.t||'')?1:0),0);
-    tagEls[i].textContent=t.label+' ('+n+')';
-  });
+  // assign each job to exactly one bucket; counts sum to the total
+  const counts=new Array(CHIP_LABELS.length).fill(0);
+  const bucket=base.map(r=>{ const b=bucketOf(r.t||''); counts[b]++; return b; });
+  tagEls.forEach((el,i)=> el.textContent=CHIP_LABELS[i]+' ('+counts[i]+')');
   const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return base.filter(r=>{
-    if(selTags.size){ const ti=r.t||''; let ok=false;
-      for(const i of selTags){ if(ROLE_TAGS[i].re.test(ti)){ ok=true; break; } }
-      if(!ok) return false; }
+  const out=[];
+  for(let idx=0; idx<base.length; idx++){
+    if(selTags.size && !selTags.has(bucket[idx])) continue;
+    const r=base[idx];
     if(terms.length){
       const hay=(r.c+' '+r.t+' '+(r.l||[]).join(' ')+' '+r.k).toLowerCase();
-      if(!terms.every(t=>hay.includes(t))) return false;
+      if(!terms.every(t=>hay.includes(t))) continue;
     }
-    return true;
-  });
+    out.push(r);
+  }
+  return out;
 }
 
 function render(){

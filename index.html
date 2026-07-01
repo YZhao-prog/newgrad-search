@@ -189,7 +189,7 @@ updateAsof();
 // so the chip counts partition the total. Anything unmatched falls into "Other".
 const ROLE_TAGS=[
   {label:'🗄️ Database · Storage · Infra',
-   re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|data platform|data engineer|data engineering|\betl\b|pipeline|query|file[\s-]?system|object store|\bdbms\b|consensus|kubernetes|\bcloud\b|devops|platform engineer)/i},
+   re:/(database|\bsql\b|storage|\bcache|caching|distributed|infrastructure|\binfra\b|\bsre\b|data platform|query|file[\s-]?system|object store|\bdbms\b|consensus|kubernetes|\bcloud\b|devops|platform engineer)/i},
   {label:'🧠 LLM · AI',
    re:/(\bllm\b|\bai\b|artificial intelligence|machine learning|\bml\b|gen[\s-]?ai|\bgpt\b|deep learning|inference|\bnlp\b|generative)/i},
   {label:'💻 Software Engineer',
@@ -199,10 +199,11 @@ const OTHER_I=ROLE_TAGS.length;
 const CHIP_LABELS=[...ROLE_TAGS.map(t=>t.label), '🧩 Other'];
 // exactly one bucket per job: AI-titled first, then data/infra company OR DB-infra title,
 // then general software engineer, else Other. FOCUS = the data/infra company list.
+const DATA_ENG_RE=/\bdata engineer(ing)?\b/i;   // data engineering is a distinct discipline — not DB/storage/infra
 function bucketOf(r){
   const t=r.t||'';
   if(ROLE_TAGS[1].re.test(t)) return 1;                    // LLM / AI title
-  if(FOCUS.has(r.c) || ROLE_TAGS[0].re.test(t)) return 0;  // data/infra company (Snowflake, Databricks…) or DB/infra title
+  if(!DATA_ENG_RE.test(t) && (FOCUS.has(r.c) || ROLE_TAGS[0].re.test(t))) return 0;  // DB/storage/infra (excluding data-engineer)
   if(ROLE_TAGS[2].re.test(t)) return 2;                    // general software engineer
   return OTHER_I;
 }

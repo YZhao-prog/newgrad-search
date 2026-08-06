@@ -13,24 +13,23 @@ big-tech companies ranked to the top.
   companies float to the top; toggle to sort by newest instead
 - 🕒 **Posted date** on every listing (absolute + relative age)
 - 💰 **Salary** shown when available
-- 🧭 **Filters** — category, sponsorship, source, and active-only
-- 🔄 **Self-updating** — pulls the latest data live from three community job repos on every
+- 🧭 **Filters** — category, sponsorship, and active-only
+- 🔄 **Self-updating** — pulls the latest data live from the Simplify job repo on every
   open, auto-refreshes every 30 min, and falls back to an embedded snapshot when offline
 - 📦 **Zero dependencies** — one static HTML file, no build step, no server
 
-## Data sources
+## Data source
 
-Data is fetched live (client-side) from these community-maintained repositories:
+Data is fetched live (client-side) from one community-maintained repository:
 
 | Source | Repository |
 |---|---|
 | Simplify | [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions) |
-| SpeedyApply | [speedyapply/2026-SWE-College-Jobs](https://github.com/speedyapply/2026-SWE-College-Jobs) |
-| Ambicuity | [ambicuity/New-Grad-Jobs](https://github.com/ambicuity/New-Grad-Jobs) |
 
-Listings are de-duplicated by application URL and normalized into a common schema. An
-embedded snapshot of the Simplify data ships inside `index.html` so the app still works
-with no internet connection.
+Listings are normalized into a common schema and de-duplicated by company + title, keeping
+the best of any duplicates (active over inactive, then newer, then whichever lists a
+salary). An embedded snapshot of the Simplify data ships inside `index.html` so the app
+still works with no internet connection.
 
 ## Run it
 
